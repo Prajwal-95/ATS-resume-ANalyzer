@@ -1,0 +1,4 @@
+# Development & testing extras
+# Base dependencies (including the test tools) are specified in requirements.txt
+-r requirements.txt
+pytest-cov==5.0.0
