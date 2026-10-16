@@ -1,6 +1,19 @@
 import axios from "axios";
 
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+// Backend API URL.
+// - Development: falls back to the local backend when VITE_API_URL is unset.
+// - Production build: VITE_API_URL MUST be set (e.g. to the Render web service URL).
+//   If it is missing in a production build, fail loudly instead of silently
+//   calling a localhost backend that does not exist in the deployed environment.
+const BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? null : "http://localhost:8000");
+
+if (!BASE_URL) {
+  throw new Error(
+    "VITE_API_URL is not configured. Set it to your backend URL before building for production."
+  );
+}
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -49,10 +62,11 @@ const toFormData = (file, jobDescription) => {
 };
 
 export const resumeApi = {
-  analyze: (file, jobDescription) =>
+  analyze: (file, jobDescription, onUploadProgress) =>
     api
       .post("/analysis/analyze", toFormData(file, jobDescription), {
         headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: onUploadProgress || undefined,
       })
       .then((r) => r.data),
 
@@ -76,6 +90,8 @@ export const analysisApi = {
   history: () => api.get("/analysis/history").then((r) => r.data),
   get: (id) => api.get(`/analysis/${id}`).then((r) => r.data),
   delete: (id) => api.delete(`/analysis/${id}`),
+  downloadReport: (id) =>
+    api.get(`/analysis/${id}/report`, { responseType: "blob" }).then((r) => r.data),
 };
 
 export default api;

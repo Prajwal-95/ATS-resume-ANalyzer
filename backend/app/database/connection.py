@@ -2,23 +2,19 @@
 Database connection and session management.
 Supports PostgreSQL (asyncpg) and SQLite (aiosqlite) for local dev.
 """
-
-import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
-# Load .env before reading DATABASE_URL
-# connection.py lives at app/database/connection.py, so parent.parent.parent = project root
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/ats_resume_checker"
-)
+from app.config import settings
+
+DATABASE_URL = settings.DATABASE_URL
 
 # SQLite needs check_same_thread=False for async usage
 connect_args = {}

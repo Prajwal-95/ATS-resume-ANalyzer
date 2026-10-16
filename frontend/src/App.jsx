@@ -13,8 +13,9 @@ export default function App() {
   return (
     <AuthProvider>
       <div className="flex min-h-screen flex-col">
+        <a href="#main-content" className="skip-link">Skip to main content</a>
         <Navbar />
-        <main className="flex-1">
+        <main className="flex-1" id="main-content">
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/upload" element={<UploadPage />} />

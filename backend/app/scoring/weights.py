@@ -1,45 +1,46 @@
 """
 Configurable ATS scoring weights.
 Each category totals to a portion of 100 points.
+Weights are loaded from the centralized settings (validated at startup).
 """
 
-import os
+from app.config import settings
 
 
 def get_scoring_weights() -> dict[str, dict]:
     """
     Return the scoring weights for each category.
-    Weights can be overridden via environment variables for flexibility.
+    Weights are loaded from settings and validated to sum to 100 at startup.
     """
     return {
         "keyword_match": {
             "label": "Keyword Match",
-            "max_score": float(os.getenv("WEIGHT_KEYWORD_MATCH", "30")),
+            "max_score": settings.SCORING_WEIGHTS["keyword_match"],
             "description": "How well important keywords from the job description appear in the resume.",
         },
         "technical_skill": {
             "label": "Technical Skills",
-            "max_score": float(os.getenv("WEIGHT_TECHNICAL_SKILL", "25")),
+            "max_score": settings.SCORING_WEIGHTS["technical_skill"],
             "description": "Match between required technical skills and skills found in the resume.",
         },
         "experience_relevance": {
             "label": "Experience Relevance",
-            "max_score": float(os.getenv("WEIGHT_EXPERIENCE", "20")),
+            "max_score": settings.SCORING_WEIGHTS["experience_relevance"],
             "description": "Whether projects and work experience are relevant to the job.",
         },
         "structure": {
             "label": "Structure",
-            "max_score": float(os.getenv("WEIGHT_STRUCTURE", "10")),
+            "max_score": settings.SCORING_WEIGHTS["structure"],
             "description": "Presence of standard resume sections such as Summary, Education, Skills, etc.",
         },
         "education": {
             "label": "Education",
-            "max_score": float(os.getenv("WEIGHT_EDUCATION", "5")),
+            "max_score": settings.SCORING_WEIGHTS["education"],
             "description": "Whether education information is present and relevant.",
         },
         "formatting": {
             "label": "Formatting",
-            "max_score": float(os.getenv("WEIGHT_FORMATTING", "10")),
+            "max_score": settings.SCORING_WEIGHTS["formatting"],
             "description": "Text readability, headings, contact info, and parsing quality.",
         },
     }

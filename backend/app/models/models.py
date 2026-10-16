@@ -117,6 +117,7 @@ class QualityIssue(Base):
     id = Column(Integer, primary_key=True, index=True)
     analysis_id = Column(Integer, ForeignKey("analyses.id"), nullable=False, index=True)
     category = Column(String(100), nullable=False)
+    label = Column(String(200), nullable=True)
     message = Column(Text, nullable=False)
     status = Column(String(50), nullable=False)  # good, warning, problem
 

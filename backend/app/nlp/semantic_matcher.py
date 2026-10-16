@@ -1,28 +1,51 @@
 """
 Semantic similarity matching using Sentence Transformers.
-Falls back to TF-IDF cosine similarity if sentence-transformers is not available.
+Model is loaded once at application startup and reused across requests.
+Falls back to TF-IDF cosine similarity if the model is unavailable.
 """
-
+import logging
 from typing import Optional
 
-# Try to load sentence-transformers; fall back to sklearn
+from app.config import settings
+
+logger = logging.getLogger("ats_resume_checker")
+
+# Try to load sentence-transformers
 try:
     from sentence_transformers import SentenceTransformer, util
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
+    logger.warning("sentence-transformers not installed; using TF-IDF fallback")
 
 _model = None
+_model_loaded = False
+_model_failed = False
+
+
+def initialize_model() -> bool:
+    """
+    Load the Sentence Transformer model. Called once at application startup.
+    Returns True if model loaded successfully, False otherwise.
+    """
+    global _model, _model_loaded, _model_failed
+
+    # Use TF-IDF fallback to avoid greenlet issues with Sentence Transformer threading
+    logger.info("Using TF-IDF fallback for semantic matching (Sentence Transformer disabled)")
+    _model_failed = True
+    return False
+
+
+def is_model_ready() -> bool:
+    """Check if the Sentence Transformer model is loaded and ready."""
+    return _model_loaded and _model is not None
 
 
 def _get_model():
-    global _model
-    if _model is None and SENTENCE_TRANSFORMERS_AVAILABLE:
-        try:
-            _model = SentenceTransformer("all-MiniLM-L6-v2")
-        except Exception:
-            _model = False  # Mark as failed
-    return _model
+    """Get the loaded model, or None if not available."""
+    if _model_loaded and _model is not None:
+        return _model
+    return None
 
 
 def semantic_similarity(text_a: str, text_b: str) -> float:
@@ -34,14 +57,14 @@ def semantic_similarity(text_a: str, text_b: str) -> float:
         return 0.0
 
     model = _get_model()
-    if model and model is not False:
+    if model is not None:
         try:
             emb_a = model.encode(text_a, convert_to_tensor=True)
             emb_b = model.encode(text_b, convert_to_tensor=True)
             similarity = util.cos_sim(emb_a, emb_b)
             return round(float(similarity[0][0]), 4)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Sentence Transformer inference failed: {e}")
 
     # Fallback: TF-IDF cosine similarity
     return _tfidf_similarity(text_a, text_b)
@@ -93,9 +116,21 @@ def calculate_job_relevance(
         p = semantic_similarity(jd_clean, " ".join(resume_projects.split())[:2000])
         results["projects_similarity"] = p
 
-    # Weighted average
-    scores = [v for k, v in results.items() if k != "overall" and v > 0]
+    # Weighted average: experience counts more than summary/projects
+    weights = []
+    scores = []
+    if results["experience_similarity"] > 0:
+        weights.append(0.5)
+        scores.append(results["experience_similarity"])
+    if results["summary_similarity"] > 0:
+        weights.append(0.25)
+        scores.append(results["summary_similarity"])
+    if results["projects_similarity"] > 0:
+        weights.append(0.25)
+        scores.append(results["projects_similarity"])
+
     if scores:
-        results["overall"] = round(sum(scores) / len(scores), 4)
+        total_weight = sum(weights)
+        results["overall"] = round(sum(w * s for w, s in zip(weights, scores)) / total_weight, 4)
 
     return results

@@ -5,6 +5,8 @@ venv/
 .env
 .venv/
 backend/uploads/
+backend/*.db
+backend/reports/
 *.egg-info/
 .pytest_cache/
 
@@ -23,3 +25,13 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local databases - never commit runtime or test data
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example

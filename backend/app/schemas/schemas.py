@@ -61,6 +61,7 @@ class SuggestionItem(BaseModel):
 
 class QualityIssueItem(BaseModel):
     category: str
+    label: Optional[str] = None
     message: str
     status: str  # good, warning, problem
 
@@ -116,3 +117,12 @@ class AnalysisResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ResumeUploadResponse(BaseModel):
+    filename: str
+    text_preview: str
+    sections: List[str]
+    contact: dict
+    skills: List[str]
+    metadata: dict

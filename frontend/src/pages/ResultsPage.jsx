@@ -20,6 +20,7 @@ export default function ResultsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState("overview");
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -34,6 +35,25 @@ export default function ResultsPage() {
     };
     load();
   }, [id]);
+
+  const handleDownloadReport = async () => {
+    setDownloading(true);
+    try {
+      const blob = await analysisApi.downloadReport(id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ats-report-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError("Failed to download report. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -72,7 +92,26 @@ export default function ResultsPage() {
             {analysis.resume_filename || "Your resume"} vs {analysis.job_title || "the job description"}
           </p>
         </div>
-        <ScoreCircle score={total_score} />
+        <div className="flex items-center gap-4">
+          <ScoreCircle score={total_score} />
+          <button
+            onClick={handleDownloadReport}
+            disabled={downloading}
+            className="btn-secondary flex items-center gap-2"
+            aria-label="Download PDF report"
+          >
+            {downloading ? (
+              "Generating..."
+            ) : (
+              <>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Export Report
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       <div className="mt-8 flex flex-wrap gap-2 border-b border-gray-200">

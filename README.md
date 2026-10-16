@@ -14,6 +14,7 @@ A production-quality web application that analyzes resumes against job descripti
 - User accounts with JWT authentication
 - Analysis history management
 - Demo mode with sample data
+- PDF report export
 - Privacy-focused (temporary file deletion)
 
 ## Tech Stack
@@ -35,8 +36,9 @@ A production-quality web application that analyzes resumes against job descripti
 │   │   ├── nlp/           # Keyword extraction, semantic matching
 │   │   ├── scoring/       # Transparent scoring engine
 │   │   ├── database/      # DB connection & session
-│   │   └── utils/         # Auth, file handling
-│   ├── tests/             # Unit tests
+│   │   └── utils/         # Auth, file handling, rate limiting
+│   ├── alembic/           # Database migrations
+│   ├── tests/             # Backend tests
 │   └── requirements.txt
 ├── frontend/
 │   └── src/
@@ -46,20 +48,18 @@ A production-quality web application that analyzes resumes against job descripti
 │       ├── context/       # Auth context
 │       └── utils/         # Demo data
 ├── run.py                 # Dev launcher (starts both backend + frontend)
+├── docker-compose.yml     # Full stack orchestration
 ├── LICENSE                # MIT License
-├── docker-compose.yml     # PostgreSQL database
 └── README.md
 ```
 
-## Getting Started
-
-### Prerequisites
+## Prerequisites
 
 - Python 3.10+
 - Node.js 18+
 - PostgreSQL (or use Docker)
 
-### Quick Start (Recommended)
+## Quick Start (Recommended)
 
 The `run.py` launcher starts both the backend and frontend with a single command:
 
@@ -83,6 +83,9 @@ python -m spacy download en_core_web_sm  # NLP model
 # Set up environment
 cp .env.example .env
 # Edit .env with your database credentials
+
+# Run migrations
+alembic upgrade head
 
 # Start the server
 uvicorn app.main:app --reload
@@ -113,12 +116,83 @@ Or create the database manually:
 createdb ats_resume_checker
 ```
 
-### Running Tests
+### Database Migrations
 
 ```bash
 cd backend
-pytest
+
+# Create a new migration (after model changes)
+alembic revision --autogenerate -m "description"
+
+# Apply migrations
+alembic upgrade head
+
+# Rollback one migration
+alembic downgrade -1
+
+# View current version
+alembic current
 ```
+
+### Running Tests
+
+```bash
+# Backend tests
+cd backend
+pytest
+
+# Frontend tests
+cd frontend
+npm run test
+
+# Frontend production build
+npm run build
+```
+
+## Docker Deployment
+
+```bash
+# Build and start all services
+docker compose up --build
+
+# Start in detached mode
+docker compose up -d --build
+
+# View logs
+docker compose logs -f
+
+# Stop all services
+docker compose down
+```
+
+The application will be available at `http://localhost:80` (frontend) with the backend on port 8000.
+
+## API Documentation
+
+### Authentication
+
+- `POST /auth/register` — Register a new user
+- `POST /auth/login` — Login and get JWT token
+- `GET /auth/me` — Get current user profile
+
+### Analysis
+
+- `POST /analysis/analyze` — Upload resume + job description, get analysis
+- `POST /analysis/demo` — Run analysis with pasted text (no file upload)
+- `GET /analysis/history` — List user's analysis history
+- `GET /analysis/{id}` — Get full analysis result by ID
+- `DELETE /analysis/{id}` — Delete an analysis
+- `GET /analysis/{id}/report` — Download PDF report
+
+### Resume
+
+- `POST /resume/upload` — Upload and parse a resume file
+
+### Health
+
+- `GET /healthz` — Liveness probe
+- `GET /health` — Full health check (includes database)
+- `GET /readyz` — Readiness probe
 
 ## ATS Scoring Engine
 
@@ -141,6 +215,23 @@ The transparent scoring engine allocates 100 points across categories (configura
 - No resumes are stored in the database
 - Analysis results are only associated with your account (if logged in)
 - You can delete your analysis history at any time
+
+## Security
+
+- Passwords hashed with bcrypt
+- JWT authentication with configurable expiration
+- File type validation via magic bytes (not just extension)
+- Rate limiting on sensitive endpoints
+- Security headers (X-Content-Type-Options, X-Frame-Options, etc.)
+- CORS restricted to configured origins
+- User isolation enforced on all data access
+
+## Known Limitations
+
+- PDF parsing does not support scanned documents (OCR required)
+- Multi-column PDF layouts may not parse perfectly
+- Semantic similarity is an estimate, not a guarantee
+- Score is an ATS-style estimate, not an actual ATS result
 
 ## License
 

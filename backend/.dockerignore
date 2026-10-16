@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+.env
+*.db
+uploads/
+reports/
+.pytest_cache/
+*.egg-info/
+tests/
+Dockerfile
+.dockerignore

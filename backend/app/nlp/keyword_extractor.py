@@ -159,6 +159,8 @@ def extract_job_keywords(job_description: str) -> list[str]:
 def match_keywords(resume_text: str, job_keywords: list[str]) -> tuple[list[dict], list[dict]]:
     """
     Match job description keywords against resume text.
+    Uses word-boundary matching to avoid false substring matches
+    (e.g., "Java" should not match "JavaScript").
     Returns (matched, missing) lists.
     """
     resume_lower = resume_text.lower()
@@ -167,8 +169,8 @@ def match_keywords(resume_text: str, job_keywords: list[str]) -> tuple[list[dict
 
     for kw in job_keywords:
         kw_lower = kw.lower().strip()
-        # Direct match
-        if kw_lower in resume_lower:
+        # Word-boundary direct match
+        if _word_boundary_match(kw_lower, resume_lower):
             matched.append({"keyword": kw, "confidence": 1.0})
             continue
 
@@ -177,7 +179,7 @@ def match_keywords(resume_text: str, job_keywords: list[str]) -> tuple[list[dict
         synonyms = SKILL_SYNONYMS.get(canonical, []) + [canonical]
         found = False
         for syn in synonyms:
-            if syn.lower() in resume_lower:
+            if _word_boundary_match(syn.lower(), resume_lower):
                 matched.append({"keyword": kw, "confidence": 0.8})
                 found = True
                 break
@@ -186,3 +188,19 @@ def match_keywords(resume_text: str, job_keywords: list[str]) -> tuple[list[dict
             missing.append({"keyword": kw, "importance": "high"})
 
     return matched, missing
+
+
+def _word_boundary_match(keyword: str, text: str) -> bool:
+    """
+    Check if keyword appears in text with word boundaries.
+    Handles multi-word keywords like "machine learning" and "node.js".
+    """
+    # Escape special regex chars in keyword
+    escaped = re.escape(keyword)
+    # For multi-word keywords, match as phrase with word boundaries at ends
+    if " " in keyword:
+        pattern = r'\b' + escaped.replace(r'\ ', r'\s+') + r'\b'
+    else:
+        # For single words, use word boundaries
+        pattern = r'\b' + escaped + r'\b'
+    return bool(re.search(pattern, text, re.IGNORECASE))

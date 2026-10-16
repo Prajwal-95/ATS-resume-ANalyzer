@@ -75,7 +75,11 @@ def extract_resume_text(file_path: str) -> tuple[str, dict]:
         raise ValueError(f"Unsupported file type: {ext}")
 
     if not text.strip():
-        raise ValueError("Could not extract readable text from the file.")
+        raise ValueError(
+            "Could not extract readable text from this file. "
+            "If this is a scanned PDF, it may require OCR (Optical Character Recognition) "
+            "to extract text. Please try a text-based PDF or DOCX file."
+        )
 
     return text, meta
 

@@ -1,8 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { resumeApi } from "../services/api";
 import LoadingScreen from "../components/LoadingScreen";
 import { demoResume, demoJobDescription } from "../utils/demoData";
+
+const MAX_FILE_SIZE_MB = 10;
+const ALLOWED_EXTENSIONS = [".pdf", ".docx"];
 
 export default function UploadPage() {
   const [searchParams] = useSearchParams();
@@ -11,10 +14,24 @@ export default function UploadPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
+  const validateFile = useCallback((selectedFile) => {
+    if (!selectedFile) return "Please select a file.";
+    const ext = "." + selectedFile.name.split(".").pop()?.toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      return "Unsupported file type. Please upload a PDF or DOCX file.";
+    }
+    if (selectedFile.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+      return `File too large. Maximum size is ${MAX_FILE_SIZE_MB} MB.`;
+    }
+    return null;
+  }, []);
+
   const handleDemo = async () => {
+    if (loading) return;
     setError("");
     setLoading(true);
     try {
@@ -30,6 +47,11 @@ export default function UploadPage() {
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
     if (selected) {
+      const validationError = validateFile(selected);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
       setFile(selected);
       setError("");
     }
@@ -40,12 +62,18 @@ export default function UploadPage() {
     setDragging(false);
     const dropped = e.dataTransfer.files[0];
     if (dropped) {
+      const validationError = validateFile(dropped);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
       setFile(dropped);
       setError("");
     }
   };
 
   const handleAnalyze = async () => {
+    if (loading) return;
     if (!file) {
       setError("Please upload a resume file (PDF or DOCX).");
       return;
@@ -57,13 +85,20 @@ export default function UploadPage() {
 
     setError("");
     setLoading(true);
+    setUploadProgress(0);
     try {
-      const result = await resumeApi.analyze(file, jobDescription);
+      const result = await resumeApi.analyze(file, jobDescription, (progressEvent) => {
+        if (progressEvent.total) {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percent);
+        }
+      });
       navigate(`/results/${result.id}`);
     } catch (err) {
       setError(err.response?.data?.detail || "Analysis failed. Please try again.");
     } finally {
       setLoading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -82,6 +117,19 @@ export default function UploadPage() {
       <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
         <div className="card text-center">
           <h2 className="text-xl font-semibold text-gray-900">Analyzing your resume</h2>
+          {uploadProgress > 0 && uploadProgress < 100 ? (
+            <div className="mt-4">
+              <div className="mx-auto h-2 w-48 overflow-hidden rounded-full bg-gray-200">
+                <div
+                  className="h-full rounded-full bg-primary-600 transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+              <p className="mt-2 text-sm text-gray-500">Uploading... {uploadProgress}%</p>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-gray-500">Processing your resume...</p>
+          )}
           <LoadingScreen />
         </div>
       </div>
@@ -112,8 +160,12 @@ export default function UploadPage() {
             }}
             onDragLeave={() => setDragging(false)}
             onDrop={handleDrop}
+            role="button"
+            tabIndex={0}
+            aria-label="Upload resume file"
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click(); }}
           >
-            <div className="text-4xl">📄</div>
+            <div className="text-4xl" aria-hidden="true">📄</div>
             <p className="mt-3 text-sm font-medium text-gray-700">
               {file ? file.name : "Drag & drop your resume here"}
             </p>
@@ -136,6 +188,7 @@ export default function UploadPage() {
               accept=".pdf,.docx"
               className="hidden"
               onChange={handleFileChange}
+              aria-label="Choose resume file"
             />
           </div>
         </div>
@@ -150,7 +203,9 @@ export default function UploadPage() {
             placeholder="Paste the job description here..."
             rows={10}
             className="input-field mt-4 min-h-[200px] resize-y"
+            aria-label="Job description"
           />
+          <p className="mt-1 text-xs text-gray-400">{jobDescription.length} characters</p>
         </div>
       </div>
 
@@ -159,10 +214,10 @@ export default function UploadPage() {
         <button onClick={handleAnalyze} className="btn-primary w-full px-10 py-3 text-base sm:w-auto" disabled={loading}>
           {loading ? "Analyzing..." : "Analyze Resume"}
         </button>
-        <button onClick={handleDemo} className="text-sm font-medium text-primary-600 hover:text-primary-700">
+        <button onClick={handleDemo} className="text-sm font-medium text-primary-600 hover:text-primary-700" disabled={loading}>
           Try Demo with sample data
         </button>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
       </div>
     </div>
   );

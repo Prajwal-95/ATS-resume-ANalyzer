@@ -2,21 +2,71 @@ version: "3.8"
 
 services:
   db:
-    image: postgres:15
+    image: postgres:15-alpine
     container_name: ats_resume_db
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: ats_resume_checker
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-ats_resume_checker}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    networks:
+      - app_network
+
+  backend:
+    build: ./backend
+    container_name: ats_resume_backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-ats_resume_checker}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DEBUG: "false"
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      SENTENCE_TRANSFORMER_MODEL: ${SENTENCE_TRANSFORMER_MODEL:-all-MiniLM-L6-v2}
+      SPACY_MODEL: ${SPACY_MODEL:-en_core_web_sm}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      WEIGHT_KEYWORD_MATCH: ${WEIGHT_KEYWORD_MATCH:-30}
+      WEIGHT_TECHNICAL_SKILL: ${WEIGHT_TECHNICAL_SKILL:-25}
+      WEIGHT_EXPERIENCE: ${WEIGHT_EXPERIENCE:-20}
+      WEIGHT_STRUCTURE: ${WEIGHT_STRUCTURE:-10}
+      WEIGHT_EDUCATION: ${WEIGHT_EDUCATION:-5}
+      WEIGHT_FORMATTING: ${WEIGHT_FORMATTING:-10}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/uploads
+      - reports:/app/reports
+    restart: unless-stopped
+    networks:
+      - app_network
+
+  frontend:
+    build: ./frontend
+    container_name: ats_resume_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - app_network
 
 volumes:
   postgres_data:
+  uploads:
+  reports:
+
+networks:
+  app_network:
+    driver: bridge

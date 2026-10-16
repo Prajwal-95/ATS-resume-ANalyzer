@@ -1,0 +1,36 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.env
+*.db
+uploads/
+reports/
+.pytest_cache/
+alembic/versions/
+*.egg-info/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# CI
+.github/
