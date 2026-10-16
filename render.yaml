@@ -29,7 +29,7 @@ services:
           name: ats-resume-checker-db
           property: connectionString
       - key: JWT_SECRET_KEY
-        generate: true
+        generateValue: true
       - key: ALLOWED_ORIGINS
         value: https://your-frontend.vercel.app
       - key: SENTENCE_TRANSFORMER_MODEL
