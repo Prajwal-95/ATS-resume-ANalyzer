@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
-export default function LampScene({ onToggle = () => {} }) {
-  const [isOn, setIsOn] = useState(false);
+export default function LampScene({ onToggle = () => {}, initialOn = false }) {
+  const [isOn, setIsOn] = useState(initialOn);
   const [dragging, setDragging] = useState(false);
   const [dragX, setDragX] = useState(0);
   const [dragY, setDragY] = useState(0);
@@ -44,17 +44,13 @@ export default function LampScene({ onToggle = () => {} }) {
     updateString(dx, dy);
   };
 
-  const handlePointerUp = () => {
+const handlePointerUp = () => {
     if (!dragging) return;
     setDragging(false);
     const pulled = dragY > 30;
     resetHandle();
     if (pulled) {
-      setIsOn((prev) => {
-        const next = !prev;
-        onToggle(next);
-        return next;
-      });
+      setIsOn((prev) => !prev);
     }
   };
 
@@ -83,14 +79,10 @@ export default function LampScene({ onToggle = () => {} }) {
   useEffect(() => {
     const handle = handleRef.current;
     if (!handle) return;
-    const handleKey = (e) => {
+const handleKey = (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        setIsOn((prev) => {
-          const next = !prev;
-          onToggle(next);
-          return next;
-        });
+        setIsOn((prev) => !prev);
       }
     };
     handle.addEventListener('keydown', handleKey);

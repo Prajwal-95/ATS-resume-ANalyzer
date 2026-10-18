@@ -87,9 +87,30 @@ export default function RegisterForm({ onSubmit, error, loading }) {
 
       {displayError && <div className="error-message" role="alert">{displayError}</div>}
 
-      <button className="sign-in" type="submit" disabled={loading}>
+<button className="sign-in" type="submit" disabled={loading}>
         {loading ? 'Creating account...' : 'Sign Up'}
       </button>
+
+      <div className="divider">
+        <span></span>
+        <b>OR CONTINUE WITH</b>
+        <span></span>
+      </div>
+
+      <div className="socials">
+        <div className="social-option">
+          <button className="social-btn" type="button" disabled>
+            <span className="google-icon">G</span> Google
+          </button>
+          <span className="coming-soon" aria-hidden="true">Coming Soon</span>
+        </div>
+        <div className="social-option">
+          <button className="social-btn" type="button" disabled>
+            <span className="github-icon">•</span> GitHub
+          </button>
+          <span className="coming-soon" aria-hidden="true">Coming Soon</span>
+        </div>
+      </div>
 
       <div className="link-text">
         Already have an account? <Link to="/login">Log in</Link>

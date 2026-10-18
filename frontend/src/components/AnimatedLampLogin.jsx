@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useLamp } from '../context/LampContext';
 import LampScene from './LampScene';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
 import '../styles/lamp.css';
 
 export default function AnimatedLampLogin({ mode = 'login', onLogin, onRegister, error, loading }) {
-  const [lampOn, setLampOn] = useState(false);
+  const { lampOn, setLampOn } = useLamp();
   const isLogin = mode === 'login';
 
   const createFireflies = () => {
@@ -29,7 +29,7 @@ export default function AnimatedLampLogin({ mode = 'login', onLogin, onRegister,
   const fireflies = lampOn ? createFireflies() : [];
 
   return (
-    <div className="lamp-auth-room" aria-label="Animated lamp authentication">
+    <div className={`lamp-auth-room${lampOn ? ' on' : ''}`} aria-label="Animated lamp authentication">
       <div className="room-light"></div>
       <div className="fireflies">
         {fireflies.map((f, idx) => (
@@ -56,7 +56,7 @@ export default function AnimatedLampLogin({ mode = 'login', onLogin, onRegister,
         ))}
       </div>
 
-      <LampScene onToggle={setLampOn} />
+      <LampScene onToggle={setLampOn} initialOn={lampOn} />
 
       <section className="login-side">
         {isLogin ? (

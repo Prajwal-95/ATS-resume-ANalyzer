@@ -10,6 +10,7 @@ import LampRegisterPage from "./pages/LampRegisterPage";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import { AuthProvider } from "./context/AuthContext";
+import { LampProvider } from "./context/LampContext";
 
 function AppContent() {
   const location = useLocation();
@@ -20,14 +21,16 @@ function AppContent() {
       <a href="#main-content" className="skip-link">Skip to main content</a>
       {!isAuthRoute && <Navbar />}
       <main className="flex-1" id="main-content">
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/upload" element={<UploadPage />} />
-          <Route path="/results/:id" element={<ResultsPage />} />
-          <Route path="/login" element={<LampLoginPage />} />
-          <Route path="/register" element={<LampRegisterPage />} />
-          <Route path="/history" element={<HistoryPage />} />
-        </Routes>
+        <LampProvider>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/upload" element={<UploadPage />} />
+            <Route path="/results/:id" element={<ResultsPage />} />
+            <Route path="/login" element={<LampLoginPage />} />
+            <Route path="/register" element={<LampRegisterPage />} />
+            <Route path="/history" element={<HistoryPage />} />
+          </Routes>
+        </LampProvider>
       </main>
       {!isAuthRoute && <Footer />}
     </div>

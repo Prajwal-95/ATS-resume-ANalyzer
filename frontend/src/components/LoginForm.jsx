@@ -57,13 +57,19 @@ export default function LoginForm({ onSubmit, error, loading }) {
         <span></span>
       </div>
 
-      <div className="socials">
-        <button className="social-btn" type="button" disabled={loading}>
-          <span className="google-icon">G</span> Google
-        </button>
-        <button className="social-btn" type="button" disabled={loading}>
-          <span className="github-icon">•</span> GitHub
-        </button>
+<div className="socials">
+        <div className="social-option">
+          <button className="social-btn" type="button" disabled>
+            <span className="google-icon">G</span> Google
+          </button>
+          <span className="coming-soon" aria-hidden="true">Coming Soon</span>
+        </div>
+        <div className="social-option">
+          <button className="social-btn" type="button" disabled>
+            <span className="github-icon">•</span> GitHub
+          </button>
+          <span className="coming-soon" aria-hidden="true">Coming Soon</span>
+        </div>
       </div>
 
       <div className="link-text">
