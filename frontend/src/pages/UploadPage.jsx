@@ -38,7 +38,17 @@ export default function UploadPage() {
       const result = await resumeApi.demo(demoResume, demoJobDescription);
       navigate(`/results/${result.id}`);
     } catch (err) {
-      setError(err.response?.data?.detail || "Demo analysis failed. Please try again.");
+      // Demo uses the shared analysis backend; report a useful, safe error
+      // without exposing server internals.
+      if (!err.response) {
+        setError("The backend is unavailable. Please try again later.");
+      } else if (err.response.status === 429) {
+        setError("Demo requests are rate-limited. Please wait a moment and try again.");
+      } else if (err.response.status >= 500) {
+        setError("The demo service encountered an error. Please try again later.");
+      } else {
+        setError(err.response?.data?.detail || "Demo analysis failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

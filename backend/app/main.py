@@ -15,6 +15,10 @@ from app.database.connection import engine, Base
 from app.api import auth, resume, analysis
 from app.config import settings
 
+# Register all models on Base.metadata so schema initialization
+# (create_all) sees every table, including the analyses tables.
+import app.models.models  # noqa: F401
+
 logger = logging.getLogger("ats_resume_checker")
 
 
@@ -29,11 +33,16 @@ async def lifespan(app: FastAPI):
     if not model_ok:
         logger.warning("Sentence Transformer model not loaded; using TF-IDF fallback for semantic matching")
 
-    # Verify database connectivity on startup
+    # Verify database connectivity on startup and ensure all tables exist.
+    # Alembic owns schema migrations in production (render.yaml runs
+    # `alembic upgrade head` before start); create_all is idempotent and only
+    # creates tables that are missing, so it is safe alongside alembic and
+    # guarantees local/dev databases are usable without a manual migration step.
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
-        logger.info("Database connection verified")
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database connection verified and schema initialized")
     except Exception as e:
         logger.error(f"Database connection failed on startup: {e}")
         # Don't crash — readiness endpoint will report the issue
