@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
-export default function RegisterForm({ onSubmit, error, loading }) {
+export default function RegisterForm({ onSubmit, error, loading, success }) {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,14 +15,42 @@ export default function RegisterForm({ onSubmit, error, loading }) {
       setLocalError('Passwords do not match.');
       return;
     }
-    if (password.length < 6) {
-      setLocalError('Password must be at least 6 characters.');
+    if (password.length < 8) {
+      setLocalError('Password must be at least 8 characters.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setLocalError('Please enter a valid email address.');
       return;
     }
     onSubmit({ username, email, password });
   };
 
   const displayError = localError || error;
+
+  if (success) {
+    return (
+      <div className="glass login-card success-state">
+        <div className="glass-line"></div>
+        <div className="login-heading">
+          <h2>Check your email</h2>
+          <p>We've sent a verification link to your inbox.</p>
+        </div>
+        <div className="success-message">
+          <svg className="success-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '48px', height: '48px' }}>
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <p className="success-text">
+            After verifying your email, you'll be able to log in to your account.
+          </p>
+        </div>
+        <div className="link-text">
+          <Link to="/login">Back to login</Link>
+        </div>
+        <div className="brand-title">ATS Resume Score Checker</div>
+      </div>
+    );
+  }
 
   return (
     <form className="glass login-card" onSubmit={handleSubmit} noValidate>
@@ -68,7 +96,7 @@ export default function RegisterForm({ onSubmit, error, loading }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={6}
+            minLength={8}
           />
         </label>
 
@@ -87,7 +115,7 @@ export default function RegisterForm({ onSubmit, error, loading }) {
 
       {displayError && <div className="error-message" role="alert">{displayError}</div>}
 
-<button className="sign-in" type="submit" disabled={loading}>
+      <button className="sign-in" type="submit" disabled={loading}>
         {loading ? 'Creating account...' : 'Sign Up'}
       </button>
 

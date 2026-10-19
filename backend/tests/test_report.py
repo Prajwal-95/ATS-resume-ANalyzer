@@ -20,7 +20,7 @@ async def test_generate_report(client, auth_headers):
     assert response.content[:4] == b"%PDF"
 
 
-async def test_report_requires_auth_for_owned(client, auth_headers):
+async def test_report_requires_auth_for_owned(client, auth_headers, mock_email):
     # Create analysis as user 1
     result = await client.post("/analysis/demo", json={
         "resume_text": "Python developer",
@@ -32,11 +32,21 @@ async def test_report_requires_auth_for_owned(client, auth_headers):
     await client.post("/auth/register", json={
         "email": "user2@example.com",
         "username": "user2",
-        "password": "securepass123",
+        "password": "SecurePass1",
     })
+    # Verify user 2's email - find the verification email for user2
+    verify_token = None
+    for email_data in mock_email:
+        if email_data.get("type") == "verification" and email_data.get("to") == "user2@example.com":
+            url = email_data["url"]
+            verify_token = url.split("token=")[-1]
+            break
+    assert verify_token, "Verification email for user2 not found"
+    await client.post("/auth/verify-email", json={"token": verify_token})
+
     login2 = await client.post("/auth/login", json={
         "email": "user2@example.com",
-        "password": "securepass123",
+        "password": "SecurePass1",
     })
     token2 = login2.json()["access_token"]
 

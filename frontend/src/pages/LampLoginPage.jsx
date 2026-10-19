@@ -16,6 +16,7 @@ export default function LampLoginPage() {
       await login(email, password);
       navigate('/history');
     } catch (err) {
+      const status = err?.response?.status;
       const msg = err?.response?.data?.detail || err?.response?.data?.message || 'Login failed. Please check your credentials.';
       setError(msg);
     } finally {

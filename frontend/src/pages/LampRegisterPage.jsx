@@ -7,14 +7,16 @@ export default function LampRegisterPage() {
   const { register } = useAuth();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
 
   const handleRegister = async ({ username, email, password }) => {
     setError('');
+    setSuccess(false);
     setLoading(true);
     try {
       await register(email, username, password);
-      navigate('/history');
+      setSuccess(true);
     } catch (err) {
       const msg = err?.response?.data?.detail || err?.response?.data?.message || 'Registration failed. Please try again.';
       setError(msg);
@@ -29,6 +31,7 @@ export default function LampRegisterPage() {
       onRegister={handleRegister}
       error={error}
       loading={loading}
+      registrationSuccess={success}
     />
   );
 }

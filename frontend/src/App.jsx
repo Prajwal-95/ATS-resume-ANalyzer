@@ -7,6 +7,10 @@ import RegisterPage from "./pages/RegisterPage";
 import HistoryPage from "./pages/HistoryPage";
 import LampLoginPage from "./pages/LampLoginPage";
 import LampRegisterPage from "./pages/LampRegisterPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+import ResendVerificationPage from "./pages/ResendVerificationPage";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import { AuthProvider } from "./context/AuthContext";
@@ -14,7 +18,11 @@ import { LampProvider } from "./context/LampContext";
 
 function AppContent() {
   const location = useLocation();
-  const isAuthRoute = location.pathname === "/login" || location.pathname === "/register" || location.pathname === "/lamp/login" || location.pathname === "/lamp/register";
+  const isAuthRoute =
+    location.pathname === "/login" ||
+    location.pathname === "/register" ||
+    location.pathname === "/lamp/login" ||
+    location.pathname === "/lamp/register";
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -28,6 +36,10 @@ function AppContent() {
             <Route path="/results/:id" element={<ResultsPage />} />
             <Route path="/login" element={<LampLoginPage />} />
             <Route path="/register" element={<LampRegisterPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/resend-verification" element={<ResendVerificationPage />} />
             <Route path="/history" element={<HistoryPage />} />
           </Routes>
         </LampProvider>

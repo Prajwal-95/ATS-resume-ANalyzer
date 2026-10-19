@@ -7,7 +7,7 @@ async def test_register_user(client):
     response = await client.post("/auth/register", json={
         "email": "test@example.com",
         "username": "testuser",
-        "password": "securepass123",
+        "password": "SecurePass1",
     })
     assert response.status_code == 201
     data = response.json()
@@ -20,12 +20,12 @@ async def test_register_duplicate_email(client):
     await client.post("/auth/register", json={
         "email": "test@example.com",
         "username": "testuser1",
-        "password": "securepass123",
+        "password": "SecurePass1",
     })
     response = await client.post("/auth/register", json={
         "email": "test@example.com",
         "username": "testuser2",
-        "password": "securepass123",
+        "password": "SecurePass1",
     })
     assert response.status_code == 400
 
@@ -39,15 +39,25 @@ async def test_register_short_password(client):
     assert response.status_code == 422
 
 
-async def test_login_success(client):
+async def test_login_success(client, mock_email):
     await client.post("/auth/register", json={
         "email": "test@example.com",
         "username": "testuser",
-        "password": "securepass123",
+        "password": "SecurePass1",
     })
+    # Verify email
+    verify_token = None
+    for email_data in mock_email:
+        if email_data.get("type") == "verification":
+            url = email_data["url"]
+            verify_token = url.split("token=")[-1]
+            break
+    assert verify_token
+    await client.post("/auth/verify-email", json={"token": verify_token})
+
     response = await client.post("/auth/login", json={
         "email": "test@example.com",
-        "password": "securepass123",
+        "password": "SecurePass1",
     })
     assert response.status_code == 200
     data = response.json()
@@ -59,24 +69,34 @@ async def test_login_wrong_password(client):
     await client.post("/auth/register", json={
         "email": "test@example.com",
         "username": "testuser",
-        "password": "securepass123",
+        "password": "SecurePass1",
     })
     response = await client.post("/auth/login", json={
         "email": "test@example.com",
-        "password": "wrongpassword",
+        "password": "WrongPass1",
     })
     assert response.status_code == 401
 
 
-async def test_get_me(client):
+async def test_get_me(client, mock_email):
     await client.post("/auth/register", json={
         "email": "test@example.com",
         "username": "testuser",
-        "password": "securepass123",
+        "password": "SecurePass1",
     })
+    # Verify email
+    verify_token = None
+    for email_data in mock_email:
+        if email_data.get("type") == "verification":
+            url = email_data["url"]
+            verify_token = url.split("token=")[-1]
+            break
+    assert verify_token
+    await client.post("/auth/verify-email", json={"token": verify_token})
+
     login = await client.post("/auth/login", json={
         "email": "test@example.com",
-        "password": "securepass123",
+        "password": "SecurePass1",
     })
     token = login.json()["access_token"]
 

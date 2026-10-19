@@ -23,12 +23,17 @@ def _normalize_database_url(url: str) -> str:
     postgresql:// to postgresql+asyncpg:// without double-prefixing or
     corrupting URLs that are already correct. SQLite and other dialects
     pass through unchanged. Database credentials are not logged.
+
+    Supabase connection strings often include query parameters such as
+    ?sslmode=require or ?options=... . This function preserves any existing
+    query string rather than blindly appending parameters, which could
+    otherwise produce malformed URLs.
     """
     if not url:
         return url
     if url.startswith("postgres://"):
         return "postgresql+asyncpg://" + url[len("postgres://"):]
-    if url.startswith("postgresql://"):
+    if url.startswith("postgresql://") and not url.startswith("postgresql+"):
         return "postgresql+asyncpg://" + url[len("postgresql://"):]
     # postgresql+asyncpg:// and all other dialects pass through unchanged
     return url
@@ -43,6 +48,7 @@ class Settings:
     APP_NAME: str = "ATS Resume Score Checker"
     DEBUG: bool = False
     ENVIRONMENT: str = "production"  # development, staging, production
+    PORT: int = 8000  # Antideploy injects PORT at runtime
 
     # Database
     DATABASE_URL: str = ""
@@ -51,6 +57,19 @@ class Settings:
     JWT_SECRET_KEY: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     PASSWORD_MIN_LENGTH: int = 8
+    PASSWORD_REQUIRE_UPPERCASE: bool = True
+    PASSWORD_REQUIRE_LOWERCASE: bool = True
+    PASSWORD_REQUIRE_DIGIT: bool = True
+    PASSWORD_REQUIRE_SPECIAL: bool = False
+
+    # Email verification / password reset
+    EMAIL_VERIFICATION_EXPIRE_MINUTES: int = 30
+    PASSWORD_RESET_EXPIRE_MINUTES: int = 60
+
+    # Email delivery (Resend)
+    RESEND_API_KEY: str = ""
+    EMAIL_FROM: str = "noreply@yourapp.com"
+    FRONTEND_URL: str = "http://localhost:5173"
 
     # File handling
     UPLOAD_DIR: Path
@@ -86,6 +105,7 @@ class Settings:
     def _load(self):
         self.DEBUG = os.getenv("DEBUG", "false").lower() == "true"
         self.ENVIRONMENT = os.getenv("ENVIRONMENT", "production").lower()
+        self.PORT = int(os.getenv("PORT", "8000"))
 
         self.DATABASE_URL = _normalize_database_url(os.getenv("DATABASE_URL", ""))
         if not self.DATABASE_URL:
@@ -100,6 +120,17 @@ class Settings:
         self.JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
         self.ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
         self.PASSWORD_MIN_LENGTH = int(os.getenv("PASSWORD_MIN_LENGTH", "8"))
+        self.PASSWORD_REQUIRE_UPPERCASE = os.getenv("PASSWORD_REQUIRE_UPPERCASE", "true").lower() == "true"
+        self.PASSWORD_REQUIRE_LOWERCASE = os.getenv("PASSWORD_REQUIRE_LOWERCASE", "true").lower() == "true"
+        self.PASSWORD_REQUIRE_DIGIT = os.getenv("PASSWORD_REQUIRE_DIGIT", "true").lower() == "true"
+        self.PASSWORD_REQUIRE_SPECIAL = os.getenv("PASSWORD_REQUIRE_SPECIAL", "false").lower() == "true"
+
+        self.EMAIL_VERIFICATION_EXPIRE_MINUTES = int(os.getenv("EMAIL_VERIFICATION_EXPIRE_MINUTES", "30"))
+        self.PASSWORD_RESET_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "60"))
+
+        self.RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+        self.EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@yourapp.com")
+        self.FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
         self.UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", str(BASE_DIR / "uploads")))
         self.MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "10"))

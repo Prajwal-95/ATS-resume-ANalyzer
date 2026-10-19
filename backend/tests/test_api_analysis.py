@@ -90,29 +90,52 @@ async def test_delete_analysis(client, auth_headers):
     assert response.status_code == 404
 
 
-async def test_user_isolation(client):
+async def test_user_isolation(client, mock_email):
     """Users should not see each other's analyses."""
     # Register user 1
     await client.post("/auth/register", json={
         "email": "user1@example.com",
         "username": "user1",
-        "password": "securepass123",
+        "password": "SecurePass1",
     })
+    # Get verification token for user 1
+    verify_token1 = None
+    for email_data in mock_email:
+        if email_data.get("type") == "verification":
+            url = email_data["url"]
+            verify_token1 = url.split("token=")[-1]
+            break
+    assert verify_token1
+    await client.post("/auth/verify-email", json={"token": verify_token1})
+    
     login1 = await client.post("/auth/login", json={
         "email": "user1@example.com",
-        "password": "securepass123",
+        "password": "SecurePass1",
     })
     token1 = login1.json()["access_token"]
+
+    # Clear mock emails for user 2
+    mock_email.clear()
 
     # Register user 2
     await client.post("/auth/register", json={
         "email": "user2@example.com",
         "username": "user2",
-        "password": "securepass123",
+        "password": "SecurePass1",
     })
+    # Get verification token for user 2
+    verify_token2 = None
+    for email_data in mock_email:
+        if email_data.get("type") == "verification":
+            url = email_data["url"]
+            verify_token2 = url.split("token=")[-1]
+            break
+    assert verify_token2
+    await client.post("/auth/verify-email", json={"token": verify_token2})
+
     login2 = await client.post("/auth/login", json={
         "email": "user2@example.com",
-        "password": "securepass123",
+        "password": "SecurePass1",
     })
     token2 = login2.json()["access_token"]
 

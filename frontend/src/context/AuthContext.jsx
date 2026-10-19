@@ -37,9 +37,25 @@ export function AuthProvider({ children }) {
 
   const register = async (email, username, password) => {
     const userData = await authApi.register(email, username, password);
-    // Auto-login after registration
-    await login(email, password);
+    // Registration creates an unverified account — do NOT auto-login.
+    // The user must verify their email before they can log in.
     return userData;
+  };
+
+  const verifyEmail = async (token) => {
+    return authApi.verifyEmail(token);
+  };
+
+  const resendVerification = async (email) => {
+    return authApi.resendVerification(email);
+  };
+
+  const forgotPassword = async (email) => {
+    return authApi.forgotPassword(email);
+  };
+
+  const resetPassword = async (token, newPassword) => {
+    return authApi.resetPassword(token, newPassword);
   };
 
   const logout = () => {
@@ -50,7 +66,20 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        login,
+        register,
+        verifyEmail,
+        resendVerification,
+        forgotPassword,
+        resetPassword,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -1,0 +1,6 @@
+# Cloudflare Pages / Sevalla Static Site configuration for SPA routing
+# This file configures single-page application routing for the React frontend
+
+# Redirect all routes to index.html for client-side routing
+# Place this file in the frontend/public/ directory so it gets copied to dist/
+/*  /index.html  200

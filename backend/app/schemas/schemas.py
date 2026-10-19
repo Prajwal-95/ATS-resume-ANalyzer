@@ -27,10 +27,34 @@ class UserResponse(BaseModel):
     email: str
     username: str
     is_active: bool
+    email_verified: bool = False
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+# ── Email verification ──
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(..., min_length=1)
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
+# ── Password reset ──
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=6)
+
+
+class MessageResponse(BaseModel):
+    message: str
 
 
 # ── Analysis Schemas ──

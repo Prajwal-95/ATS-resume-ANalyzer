@@ -47,6 +47,10 @@ export default function LoginForm({ onSubmit, error, loading }) {
 
       {error && <div className="error-message" role="alert">{error}</div>}
 
+      <div className="forgot-link">
+        <Link to="/forgot-password">Forgot password?</Link>
+      </div>
+
       <button className="sign-in" type="submit" disabled={loading}>
         {loading ? 'Signing in...' : 'Sign In'}
       </button>
@@ -57,7 +61,7 @@ export default function LoginForm({ onSubmit, error, loading }) {
         <span></span>
       </div>
 
-<div className="socials">
+      <div className="socials">
         <div className="social-option">
           <button className="social-btn" type="button" disabled>
             <span className="google-icon">G</span> Google

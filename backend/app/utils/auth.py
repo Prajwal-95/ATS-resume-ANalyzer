@@ -33,6 +33,33 @@ def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 
+def validate_password(password: str) -> str | None:
+    """Validate a password against configured policy.
+
+    Returns an error message string on failure, or None on success.
+    """
+    from app.config import settings
+
+    if len(password) < settings.PASSWORD_MIN_LENGTH:
+        return f"Password must be at least {settings.PASSWORD_MIN_LENGTH} characters."
+
+    if settings.PASSWORD_REQUIRE_UPPERCASE and not any(c.isupper() for c in password):
+        return "Password must contain at least one uppercase letter."
+
+    if settings.PASSWORD_REQUIRE_LOWERCASE and not any(c.islower() for c in password):
+        return "Password must contain at least one lowercase letter."
+
+    if settings.PASSWORD_REQUIRE_DIGIT and not any(c.isdigit() for c in password):
+        return "Password must contain at least one digit."
+
+    if settings.PASSWORD_REQUIRE_SPECIAL and not any(
+        c in "!@#$%^&*()_+-=[]{}|;:,.<>?`~" for c in password
+    ):
+        return "Password must contain at least one special character."
+
+    return None
+
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))

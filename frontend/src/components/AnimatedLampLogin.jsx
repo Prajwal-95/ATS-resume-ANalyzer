@@ -4,7 +4,7 @@ import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
 import '../styles/lamp.css';
 
-export default function AnimatedLampLogin({ mode = 'login', onLogin, onRegister, error, loading }) {
+export default function AnimatedLampLogin({ mode = 'login', onLogin, onRegister, error, loading, registrationSuccess }) {
   const { lampOn, setLampOn } = useLamp();
   const isLogin = mode === 'login';
 
@@ -62,7 +62,12 @@ export default function AnimatedLampLogin({ mode = 'login', onLogin, onRegister,
         {isLogin ? (
           <LoginForm onSubmit={onLogin} error={error} loading={loading} />
         ) : (
-          <RegisterForm onSubmit={onRegister} error={error} loading={loading} />
+          <RegisterForm
+            onSubmit={onRegister}
+            error={error}
+            loading={loading}
+            success={registrationSuccess}
+          />
         )}
       </section>
     </div>

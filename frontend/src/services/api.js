@@ -2,18 +2,13 @@ import axios from "axios";
 
 // Backend API URL.
 // - Development: falls back to the local backend when VITE_API_URL is unset.
-// - Production build: VITE_API_URL MUST be set (e.g. to the Render web service URL).
-//   If it is missing in a production build, fail loudly instead of silently
-//   calling a localhost backend that does not exist in the deployed environment.
-const BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.PROD ? null : "http://localhost:8000");
-
-if (!BASE_URL) {
-  throw new Error(
-    "VITE_API_URL is not configured. Set it to your backend URL before building for production."
-  );
-}
+// - Production build (same-origin): defaults to empty string so all axios
+//   requests go to the current origin (e.g., /auth/login instead of
+//   http://localhost:8000/auth/login). This works because the FastAPI
+//   server serves both the React SPA and the API from the same origin.
+// - If VITE_API_URL is explicitly set (e.g., to a separate backend URL),
+//   that value takes precedence.
+const BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "" : "http://localhost:8000");
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -51,6 +46,14 @@ export const authApi = {
     api.post("/auth/login", { email, password }).then((r) => r.data),
   me: (token) =>
     api.get("/auth/me", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data),
+  verifyEmail: (token) =>
+    api.post("/auth/verify-email", { token }).then((r) => r.data),
+  resendVerification: (email) =>
+    api.post("/auth/resend-verification", { email }).then((r) => r.data),
+  forgotPassword: (email) =>
+    api.post("/auth/forgot-password", { email }).then((r) => r.data),
+  resetPassword: (token, newPassword) =>
+    api.post("/auth/reset-password", { token, new_password: newPassword }).then((r) => r.data),
 };
 
 // ── Resume / Analysis ──

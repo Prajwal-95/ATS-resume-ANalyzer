@@ -19,6 +19,11 @@ class User(Base):
     username = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
+    email_verified = Column(Boolean, default=False, nullable=False)
+    verification_token_hash = Column(String(255), nullable=True)
+    verification_token_expires_at = Column(DateTime, nullable=True)
+    password_reset_token_hash = Column(String(255), nullable=True)
+    password_reset_token_expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     analyses = relationship("Analysis", back_populates="user", cascade="all, delete-orphan")
