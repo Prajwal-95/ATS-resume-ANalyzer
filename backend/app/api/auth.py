@@ -73,12 +73,29 @@ async def register(
         hashed_password=hash_password(payload.password),
         email_verified=False,
     )
-    db.add(user)
-    await db.flush()
+    try:
+        db.add(user)
+        await db.flush()
 
-    # Generate and store verification token
-    token = await store_verification_token(db, user)
-    await db.refresh(user)
+        # Generate verification token and store its hash on the user object.
+        # We intentionally do NOT call store_verification_token here because it
+        # issues its own db.commit(), which would split the user creation and
+        # token storage into two separate transactions. Instead we replicate the
+        # token-generation logic inline so everything commits atomically below.
+        from app.utils.tokens import generate_token, hash_token, token_expires_at
+        token = generate_token()
+        user.verification_token_hash = hash_token(token)
+        user.verification_token_expires_at = token_expires_at()
+
+        await db.commit()
+        await db.refresh(user)
+    except Exception as e:
+        await db.rollback()
+        logger.error("Registration failed for email=%s: %s", email, e, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration failed. Please try again.",
+        )
 
     # Send verification email (never fails the registration if email delivery fails)
     verify_url = f"{settings.FRONTEND_URL}/verify-email?token={token}"

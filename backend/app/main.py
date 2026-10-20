@@ -79,8 +79,11 @@ async def add_request_id(request: Request, call_next):
     return response
 
 
-from app.middleware import SecurityHeadersMiddleware
-app.add_middleware(SecurityHeadersMiddleware)
+try:
+    from app.middleware import SecurityHeadersMiddleware
+    app.add_middleware(SecurityHeadersMiddleware)
+except ImportError:
+    logger.warning("SecurityHeadersMiddleware not found; skipping security headers")
 
 # CORS configuration — explicit origins only
 app.add_middleware(

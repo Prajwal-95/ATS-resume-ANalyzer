@@ -7,7 +7,8 @@ __pycache__/
 uploads/
 reports/
 .pytest_cache/
-alembic/versions/
+# alembic/versions/ intentionally NOT excluded — the root Dockerfile runs
+# `alembic upgrade head` at container startup and needs migration scripts.
 *.egg-info/
 
 # Node
@@ -27,8 +28,10 @@ Thumbs.db
 .git/
 .gitignore
 
-# Docker
-Dockerfile
+# Docker — do NOT exclude the root Dockerfile; Antideploy requires it
+# in the build context to select Docker build over buildpacks.
+backend/Dockerfile
+frontend/Dockerfile
 docker-compose.yml
 .dockerignore
 

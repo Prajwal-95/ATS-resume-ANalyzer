@@ -37,10 +37,10 @@ async def analyze(
     request: Request,
     file: UploadFile = File(...),
     job_description: str = Form(...),
-    user: Optional[User] = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload a resume and job description, then run the full ATS analysis."""
+    """Upload a resume and job description, then run the full ATS analysis. Requires authentication."""
     # Rate limit
     from app.config import settings
     check_rate_limit(request, prefix="analysis", max_requests=settings.RATE_LIMIT_ANALYSIS)
@@ -85,12 +85,11 @@ async def analyze(
 async def analyze_demo(
     request: Request,
     payload: dict,
-    user: Optional[User] = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Run an analysis from pasted resume text (no file upload).
-    Used by the demo mode on the frontend.
+    Run an analysis from pasted resume text (no file upload). Requires authentication.
     """
     from app.config import settings
     check_rate_limit(request, prefix="demo", max_requests=settings.RATE_LIMIT_ANALYSIS)

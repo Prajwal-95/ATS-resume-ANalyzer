@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.connection import get_db
+from app.models.models import User
+from app.utils.auth import get_current_user
 from app.utils.file_handler import validate_file, save_upload, delete_file
 from app.services.resume_parser import extract_resume_text, extract_sections, extract_contact_info, extract_skills_from_text
 from app.schemas.schemas import ResumeUploadResponse
@@ -22,11 +24,12 @@ router = APIRouter()
 async def upload_resume(
     request: Request,
     file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Upload a resume file (PDF or DOCX) and extract its text.
-    The temporary file is deleted immediately after extraction.
+    The temporary file is deleted immediately after extraction. Requires authentication.
     """
     # Rate limit
     rate_headers = check_rate_limit(request, prefix="upload", max_requests=30)

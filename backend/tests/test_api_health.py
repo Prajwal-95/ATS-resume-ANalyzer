@@ -63,30 +63,33 @@ def test_file_validation_rejects_mismatched_content():
     assert "content" in error.lower()
 
 
-async def test_upload_empty_file(client):
+async def test_upload_empty_file(client, auth_headers):
     response = await client.post(
         "/resume/upload",
         files={"file": ("test.pdf", b"", "application/pdf")},
+        headers=auth_headers,
     )
     assert response.status_code == 400
     assert "Empty" in response.json()["detail"]
 
 
-async def test_upload_invalid_file_type(client):
+async def test_upload_invalid_file_type(client, auth_headers):
     response = await client.post(
         "/resume/upload",
         files={"file": ("test.txt", b"hello world", "text/plain")},
+        headers=auth_headers,
     )
     assert response.status_code == 400
     assert "Unsupported" in response.json()["detail"]
 
 
-async def test_upload_valid_pdf(client):
+async def test_upload_valid_pdf(client, auth_headers):
     # Minimal valid PDF content
     pdf_content = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
     response = await client.post(
         "/resume/upload",
         files={"file": ("test.pdf", pdf_content, "application/pdf")},
+        headers=auth_headers,
     )
     # Should either succeed or return 422 (if PDF parsing fails on minimal content)
     assert response.status_code in (201, 422)

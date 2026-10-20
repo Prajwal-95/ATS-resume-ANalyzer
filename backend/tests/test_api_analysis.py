@@ -3,11 +3,11 @@ Integration tests for analysis API endpoints.
 """
 
 
-async def test_demo_analysis(client):
+async def test_demo_analysis(client, auth_headers):
     response = await client.post("/analysis/demo", json={
         "resume_text": "Python developer with experience in Django and React",
         "job_description": "Looking for a Python developer with Django and React experience",
-    })
+    }, headers=auth_headers)
     assert response.status_code == 201
     data = response.json()
     assert "id" in data
@@ -17,19 +17,19 @@ async def test_demo_analysis(client):
     assert data["disclaimer"]
 
 
-async def test_demo_empty_resume(client):
+async def test_demo_empty_resume(client, auth_headers):
     response = await client.post("/analysis/demo", json={
         "resume_text": "",
         "job_description": "Some job description",
-    })
+    }, headers=auth_headers)
     assert response.status_code == 400
 
 
-async def test_demo_empty_job_description(client):
+async def test_demo_empty_job_description(client, auth_headers):
     response = await client.post("/analysis/demo", json={
         "resume_text": "Some resume text",
         "job_description": "",
-    })
+    }, headers=auth_headers)
     assert response.status_code == 400
 
 
@@ -156,15 +156,24 @@ async def test_user_isolation(client, mock_email):
     assert response.status_code == 403
 
 
-async def test_anonymous_analysis_public(client):
-    """Anonymous analyses should be viewable by anyone."""
-    result = await client.post("/analysis/demo", json={
+async def test_demo_requires_auth(client):
+    """Demo analysis endpoint requires authentication."""
+    response = await client.post("/analysis/demo", json={
         "resume_text": "Python developer",
         "job_description": "Python developer needed",
     })
+    assert response.status_code == 401
+
+
+async def test_authenticated_analysis_viewable_by_owner(client, auth_headers):
+    """Authenticated users can view their own analyses."""
+    result = await client.post("/analysis/demo", json={
+        "resume_text": "Python developer",
+        "job_description": "Python developer needed",
+    }, headers=auth_headers)
     analysis_id = result.json()["id"]
 
-    # Anyone can view it
-    response = await client.get(f"/analysis/{analysis_id}")
+    # Owner can view it
+    response = await client.get(f"/analysis/{analysis_id}", headers=auth_headers)
     assert response.status_code == 200
     assert response.json()["id"] == analysis_id

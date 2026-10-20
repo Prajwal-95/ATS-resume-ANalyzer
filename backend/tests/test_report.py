@@ -60,14 +60,14 @@ async def test_report_not_found(client, auth_headers):
     assert response.status_code == 404
 
 
-async def test_report_anonymous_analysis(client):
-    """Anonymous analysis reports should be downloadable by anyone."""
+async def test_report_authenticated_analysis(client, auth_headers):
+    """Authenticated users can download their own analysis reports."""
     result = await client.post("/analysis/demo", json={
         "resume_text": "Python developer",
         "job_description": "Python developer needed",
-    })
+    }, headers=auth_headers)
     analysis_id = result.json()["id"]
 
-    response = await client.get(f"/analysis/{analysis_id}/report")
+    response = await client.get(f"/analysis/{analysis_id}/report", headers=auth_headers)
     assert response.status_code == 200
     assert response.content[:4] == b"%PDF"

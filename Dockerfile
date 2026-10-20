@@ -58,8 +58,7 @@ USER 1000:1000
 EXPOSE 8000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT:-8000}/healthz')" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=3 CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.getenv('PORT', '8000') + '/healthz', timeout=5).read()"]
 
 # Run migrations then start uvicorn on the port Antideploy provides.
 # ${PORT:-8000} falls back to 8000 for local development.

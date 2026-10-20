@@ -29,10 +29,16 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle 401 by clearing token
+    // Handle 401 by clearing token and redirecting to login
     if (error.response?.status === 401) {
       localStorage.removeItem("ats_token");
       localStorage.removeItem("ats_user");
+      // Only redirect if not already on an auth page to avoid redirect loops
+      const currentPath = window.location.pathname;
+      const authPaths = ["/login", "/register", "/verify-email", "/forgot-password", "/reset-password", "/resend-verification"];
+      if (!authPaths.some((p) => currentPath.startsWith(p))) {
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }

@@ -9,26 +9,48 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("ats_token");
-    const storedUser = localStorage.getItem("ats_user");
-    if (storedToken) {
-      setToken(storedToken);
-      if (storedUser) {
-        try {
-          setUser(JSON.parse(storedUser));
-        } catch {
+    let cancelled = false;
+
+    async function validateSession() {
+      const storedToken = localStorage.getItem("ats_token");
+      const storedUser = localStorage.getItem("ats_user");
+
+      if (!storedToken) {
+        if (!cancelled) setLoading(false);
+        return;
+      }
+
+      // Validate the stored JWT against the server — do NOT trust
+      // localStorage alone, as the token may be expired or revoked.
+      try {
+        const me = await authApi.me(storedToken);
+        if (cancelled) return;
+        setToken(storedToken);
+        setUser(me);
+        // Refresh stored user data in case profile changed
+        localStorage.setItem("ats_user", JSON.stringify(me));
+      } catch {
+        // Token is invalid, expired, or server unreachable — clear session
+        if (!cancelled) {
+          localStorage.removeItem("ats_token");
           localStorage.removeItem("ats_user");
+          setToken(null);
+          setUser(null);
         }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
-    setLoading(false);
+
+    validateSession();
+    return () => { cancelled = true; };
   }, []);
 
   const login = async (email, password) => {
     const data = await authApi.login(email, password);
     localStorage.setItem("ats_token", data.access_token);
     setToken(data.access_token);
-    // Fetch user profile
+    // Fetch user profile to confirm token validity and get user data
     const me = await authApi.me(data.access_token);
     setUser(me);
     localStorage.setItem("ats_user", JSON.stringify(me));
@@ -42,8 +64,8 @@ export function AuthProvider({ children }) {
     return userData;
   };
 
-  const verifyEmail = async (token) => {
-    return authApi.verifyEmail(token);
+  const verifyEmail = async (verificationToken) => {
+    return authApi.verifyEmail(verificationToken);
   };
 
   const resendVerification = async (email) => {
@@ -54,8 +76,8 @@ export function AuthProvider({ children }) {
     return authApi.forgotPassword(email);
   };
 
-  const resetPassword = async (token, newPassword) => {
-    return authApi.resetPassword(token, newPassword);
+  const resetPassword = async (resetToken, newPassword) => {
+    return authApi.resetPassword(resetToken, newPassword);
   };
 
   const logout = () => {

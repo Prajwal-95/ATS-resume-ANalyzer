@@ -1,0 +1,580 @@
+﻿========== GIT STATUS ==========
+ M .dockerignore
+ M Dockerfile
+ M backend/app/api/analysis.py
+ M backend/app/api/auth.py
+ M backend/app/api/resume.py
+ M backend/app/main.py
+ M backend/tests/test_api_analysis.py
+ M backend/tests/test_api_health.py
+ M backend/tests/test_rate_limit.py
+ M backend/tests/test_report.py
+ M frontend/src/App.jsx
+ M frontend/src/context/AuthContext.jsx
+ M frontend/src/pages/LampLoginPage.jsx
+ M frontend/src/services/api.js
+ M runtime.txt
+?? frontend/src/components/ProtectedRoute.jsx
+
+========== DIFF SUMMARY ==========
+ .dockerignore                        |  9 ++++---
+ Dockerfile                           |  3 +--
+ backend/app/api/analysis.py          |  9 +++----
+ backend/app/api/auth.py              | 29 ++++++++++++++++-----
+ backend/app/api/resume.py            |  5 +++-
+ backend/app/main.py                  |  7 +++--
+ backend/tests/test_api_analysis.py   | 31 ++++++++++++++--------
+ backend/tests/test_api_health.py     |  9 ++++---
+ backend/tests/test_rate_limit.py     |  6 ++---
+ backend/tests/test_report.py         |  8 +++---
+ frontend/src/App.jsx                 | 12 +++++----
+ frontend/src/context/AuthContext.jsx | 50 ++++++++++++++++++++++++++----------
+ frontend/src/pages/LampLoginPage.jsx |  9 ++++---
+ frontend/src/services/api.js         |  8 +++++-
+ runtime.txt                          |  2 +-
+ 15 files changed, 133 insertions(+), 64 deletions(-)
+
+========== TRACKED FILE CHANGES ==========
+diff --git a/.dockerignore b/.dockerignore
+index 075d472..ebdb063 100644
+--- a/.dockerignore
++++ b/.dockerignore
+@@ -7,7 +7,8 @@ __pycache__/
+ uploads/
+ reports/
+ .pytest_cache/
+-alembic/versions/
++# alembic/versions/ intentionally NOT excluded ΓÇö the root Dockerfile runs
++# `alembic upgrade head` at container startup and needs migration scripts.
+ *.egg-info/
+ 
+ # Node
+@@ -27,8 +28,10 @@ Thumbs.db
+ .git/
+ .gitignore
+ 
+-# Docker
+-Dockerfile
++# Docker ΓÇö do NOT exclude the root Dockerfile; Antideploy requires it
++# in the build context to select Docker build over buildpacks.
++backend/Dockerfile
++frontend/Dockerfile
+ docker-compose.yml
+ .dockerignore
+ 
+diff --git a/Dockerfile b/Dockerfile
+index 8221b52..2f1e98c 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -58,8 +58,7 @@ USER 1000:1000
+ EXPOSE 8000
+ 
+ # Health check
+-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT:-8000}/healthz')" || exit 1
++HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=3 CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.getenv('PORT', '8000') + '/healthz', timeout=5).read()"]
+ 
+ # Run migrations then start uvicorn on the port Antideploy provides.
+ # ${PORT:-8000} falls back to 8000 for local development.
+diff --git a/backend/app/api/analysis.py b/backend/app/api/analysis.py
+index 377055b..98fa0d8 100644
+--- a/backend/app/api/analysis.py
++++ b/backend/app/api/analysis.py
+@@ -37,10 +37,10 @@ async def analyze(
+     request: Request,
+     file: UploadFile = File(...),
+     job_description: str = Form(...),
+-    user: Optional[User] = Depends(get_optional_user),
++    user: User = Depends(get_current_user),
+     db: AsyncSession = Depends(get_db),
+ ):
+-    """Upload a resume and job description, then run the full ATS analysis."""
++    """Upload a resume and job description, then run the full ATS analysis. Requires authentication."""
+     # Rate limit
+     from app.config import settings
+     check_rate_limit(request, prefix="analysis", max_requests=settings.RATE_LIMIT_ANALYSIS)
+@@ -85,12 +85,11 @@ async def analyze(
+ async def analyze_demo(
+     request: Request,
+     payload: dict,
+-    user: Optional[User] = Depends(get_optional_user),
++    user: User = Depends(get_current_user),
+     db: AsyncSession = Depends(get_db),
+ ):
+     """
+-    Run an analysis from pasted resume text (no file upload).
+-    Used by the demo mode on the frontend.
++    Run an analysis from pasted resume text (no file upload). Requires authentication.
+     """
+     from app.config import settings
+     check_rate_limit(request, prefix="demo", max_requests=settings.RATE_LIMIT_ANALYSIS)
+diff --git a/backend/app/api/auth.py b/backend/app/api/auth.py
+index 65a7ab3..1700321 100644
+--- a/backend/app/api/auth.py
++++ b/backend/app/api/auth.py
+@@ -73,12 +73,29 @@ async def register(
+         hashed_password=hash_password(payload.password),
+         email_verified=False,
+     )
+-    db.add(user)
+-    await db.flush()
+-
+-    # Generate and store verification token
+-    token = await store_verification_token(db, user)
+-    await db.refresh(user)
++    try:
++        db.add(user)
++        await db.flush()
++
++        # Generate verification token and store its hash on the user object.
++        # We intentionally do NOT call store_verification_token here because it
++        # issues its own db.commit(), which would split the user creation and
++        # token storage into two separate transactions. Instead we replicate the
++        # token-generation logic inline so everything commits atomically below.
++        from app.utils.tokens import generate_token, hash_token, token_expires_at
++        token = generate_token()
++        user.verification_token_hash = hash_token(token)
++        user.verification_token_expires_at = token_expires_at()
++
++        await db.commit()
++        await db.refresh(user)
++    except Exception as e:
++        await db.rollback()
++        logger.error("Registration failed for email=%s: %s", email, e, exc_info=True)
++        raise HTTPException(
++            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
++            detail="Registration failed. Please try again.",
++        )
+ 
+     # Send verification email (never fails the registration if email delivery fails)
+     verify_url = f"{settings.FRONTEND_URL}/verify-email?token={token}"
+diff --git a/backend/app/api/resume.py b/backend/app/api/resume.py
+index ae50ac1..2b23bf0 100644
+--- a/backend/app/api/resume.py
++++ b/backend/app/api/resume.py
+@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, Request
+ from sqlalchemy.ext.asyncio import AsyncSession
+ 
+ from app.database.connection import get_db
++from app.models.models import User
++from app.utils.auth import get_current_user
+ from app.utils.file_handler import validate_file, save_upload, delete_file
+ from app.services.resume_parser import extract_resume_text, extract_sections, extract_contact_info, extract_skills_from_text
+ from app.schemas.schemas import ResumeUploadResponse
+@@ -22,11 +24,12 @@ router = APIRouter()
+ async def upload_resume(
+     request: Request,
+     file: UploadFile = File(...),
++    user: User = Depends(get_current_user),
+     db: AsyncSession = Depends(get_db),
+ ):
+     """
+     Upload a resume file (PDF or DOCX) and extract its text.
+-    The temporary file is deleted immediately after extraction.
++    The temporary file is deleted immediately after extraction. Requires authentication.
+     """
+     # Rate limit
+     rate_headers = check_rate_limit(request, prefix="upload", max_requests=30)
+diff --git a/backend/app/main.py b/backend/app/main.py
+index 40383d1..9ff40c0 100644
+--- a/backend/app/main.py
++++ b/backend/app/main.py
+@@ -79,8 +79,11 @@ async def add_request_id(request: Request, call_next):
+     return response
+ 
+ 
+-from app.middleware import SecurityHeadersMiddleware
+-app.add_middleware(SecurityHeadersMiddleware)
++try:
++    from app.middleware import SecurityHeadersMiddleware
++    app.add_middleware(SecurityHeadersMiddleware)
++except ImportError:
++    logger.warning("SecurityHeadersMiddleware not found; skipping security headers")
+ 
+ # CORS configuration ΓÇö explicit origins only
+ app.add_middleware(
+diff --git a/backend/tests/test_api_analysis.py b/backend/tests/test_api_analysis.py
+index b4b1ecc..56383f6 100644
+--- a/backend/tests/test_api_analysis.py
++++ b/backend/tests/test_api_analysis.py
+@@ -3,11 +3,11 @@ Integration tests for analysis API endpoints.
+ """
+ 
+ 
+-async def test_demo_analysis(client):
++async def test_demo_analysis(client, auth_headers):
+     response = await client.post("/analysis/demo", json={
+         "resume_text": "Python developer with experience in Django and React",
+         "job_description": "Looking for a Python developer with Django and React experience",
+-    })
++    }, headers=auth_headers)
+     assert response.status_code == 201
+     data = response.json()
+     assert "id" in data
+@@ -17,19 +17,19 @@ async def test_demo_analysis(client):
+     assert data["disclaimer"]
+ 
+ 
+-async def test_demo_empty_resume(client):
++async def test_demo_empty_resume(client, auth_headers):
+     response = await client.post("/analysis/demo", json={
+         "resume_text": "",
+         "job_description": "Some job description",
+-    })
++    }, headers=auth_headers)
+     assert response.status_code == 400
+ 
+ 
+-async def test_demo_empty_job_description(client):
++async def test_demo_empty_job_description(client, auth_headers):
+     response = await client.post("/analysis/demo", json={
+         "resume_text": "Some resume text",
+         "job_description": "",
+-    })
++    }, headers=auth_headers)
+     assert response.status_code == 400
+ 
+ 
+@@ -156,15 +156,24 @@ async def test_user_isolation(client, mock_email):
+     assert response.status_code == 403
+ 
+ 
+-async def test_anonymous_analysis_public(client):
+-    """Anonymous analyses should be viewable by anyone."""
+-    result = await client.post("/analysis/demo", json={
++async def test_demo_requires_auth(client):
++    """Demo analysis endpoint requires authentication."""
++    response = await client.post("/analysis/demo", json={
+         "resume_text": "Python developer",
+         "job_description": "Python developer needed",
+     })
++    assert response.status_code == 401
++
++
++async def test_authenticated_analysis_viewable_by_owner(client, auth_headers):
++    """Authenticated users can view their own analyses."""
++    result = await client.post("/analysis/demo", json={
++        "resume_text": "Python developer",
++        "job_description": "Python developer needed",
++    }, headers=auth_headers)
+     analysis_id = result.json()["id"]
+ 
+-    # Anyone can view it
+-    response = await client.get(f"/analysis/{analysis_id}")
++    # Owner can view it
++    response = await client.get(f"/analysis/{analysis_id}", headers=auth_headers)
+     assert response.status_code == 200
+     assert response.json()["id"] == analysis_id
+diff --git a/backend/tests/test_api_health.py b/backend/tests/test_api_health.py
+index 0501075..1689c8d 100644
+--- a/backend/tests/test_api_health.py
++++ b/backend/tests/test_api_health.py
+@@ -63,30 +63,33 @@ def test_file_validation_rejects_mismatched_content():
+     assert "content" in error.lower()
+ 
+ 
+-async def test_upload_empty_file(client):
++async def test_upload_empty_file(client, auth_headers):
+     response = await client.post(
+         "/resume/upload",
+         files={"file": ("test.pdf", b"", "application/pdf")},
++        headers=auth_headers,
+     )
+     assert response.status_code == 400
+     assert "Empty" in response.json()["detail"]
+ 
+ 
+-async def test_upload_invalid_file_type(client):
++async def test_upload_invalid_file_type(client, auth_headers):
+     response = await client.post(
+         "/resume/upload",
+         files={"file": ("test.txt", b"hello world", "text/plain")},
++        headers=auth_headers,
+     )
+     assert response.status_code == 400
+     assert "Unsupported" in response.json()["detail"]
+ 
+ 
+-async def test_upload_valid_pdf(client):
++async def test_upload_valid_pdf(client, auth_headers):
+     # Minimal valid PDF content
+     pdf_content = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
+     response = await client.post(
+         "/resume/upload",
+         files={"file": ("test.pdf", pdf_content, "application/pdf")},
++        headers=auth_headers,
+     )
+     # Should either succeed or return 422 (if PDF parsing fails on minimal content)
+     assert response.status_code in (201, 422)
+diff --git a/backend/tests/test_rate_limit.py b/backend/tests/test_rate_limit.py
+index 2cfb29b..7ad9ec8 100644
+--- a/backend/tests/test_rate_limit.py
++++ b/backend/tests/test_rate_limit.py
+@@ -20,7 +20,7 @@ async def test_rate_limit_headers_present(client):
+     assert response.status_code == 200
+ 
+ 
+-async def test_rate_limit_triggers(client):
++async def test_rate_limit_triggers(client, auth_headers):
+     """Test that rate limiting triggers after exceeding the limit on analysis endpoint."""
+     from app.config import settings
+     settings.RATE_LIMIT_ENABLED = True
+@@ -32,14 +32,14 @@ async def test_rate_limit_triggers(client):
+         response = await client.post("/analysis/demo", json={
+             "resume_text": "Python developer",
+             "job_description": "Python developer needed",
+-        })
++        }, headers=auth_headers)
+         assert response.status_code == 201
+ 
+     # Next request should be rate limited
+     response = await client.post("/analysis/demo", json={
+         "resume_text": "Python developer",
+         "job_description": "Python developer needed",
+-    })
++    }, headers=auth_headers)
+     assert response.status_code == 429
+     assert "Rate limit exceeded" in response.json()["detail"]
+     assert "Retry-After" in response.headers
+diff --git a/backend/tests/test_report.py b/backend/tests/test_report.py
+index c2c5439..260a6f2 100644
+--- a/backend/tests/test_report.py
++++ b/backend/tests/test_report.py
+@@ -60,14 +60,14 @@ async def test_report_not_found(client, auth_headers):
+     assert response.status_code == 404
+ 
+ 
+-async def test_report_anonymous_analysis(client):
+-    """Anonymous analysis reports should be downloadable by anyone."""
++async def test_report_authenticated_analysis(client, auth_headers):
++    """Authenticated users can download their own analysis reports."""
+     result = await client.post("/analysis/demo", json={
+         "resume_text": "Python developer",
+         "job_description": "Python developer needed",
+-    })
++    }, headers=auth_headers)
+     analysis_id = result.json()["id"]
+ 
+-    response = await client.get(f"/analysis/{analysis_id}/report")
++    response = await client.get(f"/analysis/{analysis_id}/report", headers=auth_headers)
+     assert response.status_code == 200
+     assert response.content[:4] == b"%PDF"
+diff --git a/frontend/src/App.jsx b/frontend/src/App.jsx
+index 25dc0ad..b6c3459 100644
+--- a/frontend/src/App.jsx
++++ b/frontend/src/App.jsx
+@@ -2,8 +2,6 @@ import { Routes, Route, useLocation } from "react-router-dom";
+ import LandingPage from "./pages/LandingPage";
+ import UploadPage from "./pages/UploadPage";
+ import ResultsPage from "./pages/ResultsPage";
+-import LoginPage from "./pages/LoginPage";
+-import RegisterPage from "./pages/RegisterPage";
+ import HistoryPage from "./pages/HistoryPage";
+ import LampLoginPage from "./pages/LampLoginPage";
+ import LampRegisterPage from "./pages/LampRegisterPage";
+@@ -13,6 +11,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
+ import ResendVerificationPage from "./pages/ResendVerificationPage";
+ import Navbar from "./components/Navbar";
+ import Footer from "./components/Footer";
++import ProtectedRoute from "./components/ProtectedRoute";
+ import { AuthProvider } from "./context/AuthContext";
+ import { LampProvider } from "./context/LampContext";
+ 
+@@ -31,16 +30,19 @@ function AppContent() {
+       <main className="flex-1" id="main-content">
+         <LampProvider>
+           <Routes>
++            {/* Public routes */}
+             <Route path="/" element={<LandingPage />} />
+-            <Route path="/upload" element={<UploadPage />} />
+-            <Route path="/results/:id" element={<ResultsPage />} />
+             <Route path="/login" element={<LampLoginPage />} />
+             <Route path="/register" element={<LampRegisterPage />} />
+             <Route path="/verify-email" element={<VerifyEmailPage />} />
+             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+             <Route path="/reset-password" element={<ResetPasswordPage />} />
+             <Route path="/resend-verification" element={<ResendVerificationPage />} />
+-            <Route path="/history" element={<HistoryPage />} />
++
++            {/* Protected routes ΓÇö require authentication */}
++            <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
++            <Route path="/results/:id" element={<ProtectedRoute><ResultsPage /></ProtectedRoute>} />
++            <Route path="/history" element={<ProtectedRoute><HistoryPage /></ProtectedRoute>} />
+           </Routes>
+         </LampProvider>
+       </main>
+diff --git a/frontend/src/context/AuthContext.jsx b/frontend/src/context/AuthContext.jsx
+index 8180a18..eb13af5 100644
+--- a/frontend/src/context/AuthContext.jsx
++++ b/frontend/src/context/AuthContext.jsx
+@@ -9,26 +9,48 @@ export function AuthProvider({ children }) {
+   const [loading, setLoading] = useState(true);
+ 
+   useEffect(() => {
+-    const storedToken = localStorage.getItem("ats_token");
+-    const storedUser = localStorage.getItem("ats_user");
+-    if (storedToken) {
+-      setToken(storedToken);
+-      if (storedUser) {
+-        try {
+-          setUser(JSON.parse(storedUser));
+-        } catch {
++    let cancelled = false;
++
++    async function validateSession() {
++      const storedToken = localStorage.getItem("ats_token");
++      const storedUser = localStorage.getItem("ats_user");
++
++      if (!storedToken) {
++        if (!cancelled) setLoading(false);
++        return;
++      }
++
++      // Validate the stored JWT against the server ΓÇö do NOT trust
++      // localStorage alone, as the token may be expired or revoked.
++      try {
++        const me = await authApi.me(storedToken);
++        if (cancelled) return;
++        setToken(storedToken);
++        setUser(me);
++        // Refresh stored user data in case profile changed
++        localStorage.setItem("ats_user", JSON.stringify(me));
++      } catch {
++        // Token is invalid, expired, or server unreachable ΓÇö clear session
++        if (!cancelled) {
++          localStorage.removeItem("ats_token");
+           localStorage.removeItem("ats_user");
++          setToken(null);
++          setUser(null);
+         }
++      } finally {
++        if (!cancelled) setLoading(false);
+       }
+     }
+-    setLoading(false);
++
++    validateSession();
++    return () => { cancelled = true; };
+   }, []);
+ 
+   const login = async (email, password) => {
+     const data = await authApi.login(email, password);
+     localStorage.setItem("ats_token", data.access_token);
+     setToken(data.access_token);
+-    // Fetch user profile
++    // Fetch user profile to confirm token validity and get user data
+     const me = await authApi.me(data.access_token);
+     setUser(me);
+     localStorage.setItem("ats_user", JSON.stringify(me));
+@@ -42,8 +64,8 @@ export function AuthProvider({ children }) {
+     return userData;
+   };
+ 
+-  const verifyEmail = async (token) => {
+-    return authApi.verifyEmail(token);
++  const verifyEmail = async (verificationToken) => {
++    return authApi.verifyEmail(verificationToken);
+   };
+ 
+   const resendVerification = async (email) => {
+@@ -54,8 +76,8 @@ export function AuthProvider({ children }) {
+     return authApi.forgotPassword(email);
+   };
+ 
+-  const resetPassword = async (token, newPassword) => {
+-    return authApi.resetPassword(token, newPassword);
++  const resetPassword = async (resetToken, newPassword) => {
++    return authApi.resetPassword(resetToken, newPassword);
+   };
+ 
+   const logout = () => {
+diff --git a/frontend/src/pages/LampLoginPage.jsx b/frontend/src/pages/LampLoginPage.jsx
+index b78ee8b..554c998 100644
+--- a/frontend/src/pages/LampLoginPage.jsx
++++ b/frontend/src/pages/LampLoginPage.jsx
+@@ -1,5 +1,5 @@
+ import { useState } from 'react';
+-import { useNavigate } from 'react-router-dom';
++import { useNavigate, useLocation } from 'react-router-dom';
+ import AnimatedLampLogin from '../components/AnimatedLampLogin';
+ import { useAuth } from '../context/AuthContext';
+ 
+@@ -8,15 +8,18 @@ export default function LampLoginPage() {
+   const [error, setError] = useState('');
+   const [loading, setLoading] = useState(false);
+   const navigate = useNavigate();
++  const location = useLocation();
+ 
+   const handleLogin = async ({ email, password }) => {
+     setError('');
+     setLoading(true);
+     try {
+       await login(email, password);
+-      navigate('/history');
++      // Redirect to the page the user originally intended to visit,
++      // or fall back to /history if they navigated to /login directly.
++      const from = location.state?.from?.pathname || '/history';
++      navigate(from, { replace: true });
+     } catch (err) {
+-      const status = err?.response?.status;
+       const msg = err?.response?.data?.detail || err?.response?.data?.message || 'Login failed. Please check your credentials.';
+       setError(msg);
+     } finally {
+diff --git a/frontend/src/services/api.js b/frontend/src/services/api.js
+index b3ed185..107e0fa 100644
+--- a/frontend/src/services/api.js
++++ b/frontend/src/services/api.js
+@@ -29,10 +29,16 @@ api.interceptors.request.use((config) => {
+ api.interceptors.response.use(
+   (response) => response,
+   (error) => {
+-    // Handle 401 by clearing token
++    // Handle 401 by clearing token and redirecting to login
+     if (error.response?.status === 401) {
+       localStorage.removeItem("ats_token");
+       localStorage.removeItem("ats_user");
++      // Only redirect if not already on an auth page to avoid redirect loops
++      const currentPath = window.location.pathname;
++      const authPaths = ["/login", "/register", "/verify-email", "/forgot-password", "/reset-password", "/resend-verification"];
++      if (!authPaths.some((p) => currentPath.startsWith(p))) {
++        window.location.href = "/login";
++      }
+     }
+     return Promise.reject(error);
+   }
+diff --git a/runtime.txt b/runtime.txt
+index c2d5a35..8b13789 100644
+--- a/runtime.txt
++++ b/runtime.txt
+@@ -1 +1 @@
+-python-3.10.11
++
+
+========== NEW PROTECTED ROUTE ==========
+import { Navigate, useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+
+/**
+ * Route guard that redirects unauthenticated users to the login page.
+ * Preserves the intended destination so the user is redirected back after login.
+ */
+export default function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    // Redirect to login with the intended destination preserved in state
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return children;
+}
+

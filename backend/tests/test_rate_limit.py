@@ -20,7 +20,7 @@ async def test_rate_limit_headers_present(client):
     assert response.status_code == 200
 
 
-async def test_rate_limit_triggers(client):
+async def test_rate_limit_triggers(client, auth_headers):
     """Test that rate limiting triggers after exceeding the limit on analysis endpoint."""
     from app.config import settings
     settings.RATE_LIMIT_ENABLED = True
@@ -32,14 +32,14 @@ async def test_rate_limit_triggers(client):
         response = await client.post("/analysis/demo", json={
             "resume_text": "Python developer",
             "job_description": "Python developer needed",
-        })
+        }, headers=auth_headers)
         assert response.status_code == 201
 
     # Next request should be rate limited
     response = await client.post("/analysis/demo", json={
         "resume_text": "Python developer",
         "job_description": "Python developer needed",
-    })
+    }, headers=auth_headers)
     assert response.status_code == 429
     assert "Rate limit exceeded" in response.json()["detail"]
     assert "Retry-After" in response.headers
