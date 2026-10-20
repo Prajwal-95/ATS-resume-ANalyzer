@@ -5,6 +5,7 @@ Uses a Pydantic-free settings class to avoid extra dependencies while still
 providing startup validation. All validation happens at import time so
 misconfiguration fails fast.
 """
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 import os
 import secrets
 from pathlib import Path
@@ -16,27 +17,48 @@ load_dotenv(BASE_DIR / ".env")
 
 
 def _normalize_database_url(url: str) -> str:
-    """Normalize a database URL for SQLAlchemy async drivers.
-
-    Render provides postgresql:// URLs, but SQLAlchemy's asyncpg dialect
-    requires postgresql+asyncpg://. This normalizes postgres:// and
-    postgresql:// to postgresql+asyncpg:// without double-prefixing or
-    corrupting URLs that are already correct. SQLite and other dialects
-    pass through unchanged. Database credentials are not logged.
-
-    Supabase connection strings often include query parameters such as
-    ?sslmode=require or ?options=... . This function preserves any existing
-    query string rather than blindly appending parameters, which could
-    otherwise produce malformed URLs.
-    """
+    """Normalize PostgreSQL URLs for SQLAlchemy's asyncpg driver."""
     if not url:
         return url
-    if url.startswith("postgres://"):
-        return "postgresql+asyncpg://" + url[len("postgres://"):]
-    if url.startswith("postgresql://") and not url.startswith("postgresql+"):
-        return "postgresql+asyncpg://" + url[len("postgresql://"):]
-    # postgresql+asyncpg:// and all other dialects pass through unchanged
-    return url
+
+    url = url.replace("postgres://", "postgresql://", 1) if url.startswith("postgres://") else url
+
+    if url.startswith("postgresql://"):
+        url = "postgresql+asyncpg://" + url[len("postgresql://"):]
+
+    if not url.startswith("postgresql+asyncpg://"):
+        return url
+
+    parts = urlsplit(url)
+    query = parse_qsl(parts.query, keep_blank_values=True)
+    normalized = []
+    sslmode = None
+
+    for key, value in query:
+        if key.lower() == "sslmode":
+            sslmode = value
+        else:
+            normalized.append((key, value))
+
+    # asyncpg accepts "ssl", not libpq's "sslmode" keyword.
+    if sslmode and not any(key.lower() == "ssl" for key, _ in normalized):
+        ssl_values = {
+            "require": "require",
+            "verify-ca": "verify-ca",
+            "verify-full": "verify-full",
+            "prefer": "prefer",
+            "allow": "allow",
+            "disable": "disable",
+        }
+        normalized.append(("ssl", ssl_values.get(sslmode.lower(), sslmode)))
+
+    return urlunsplit((
+        parts.scheme,
+        parts.netloc,
+        parts.path,
+        urlencode(normalized),
+        parts.fragment,
+    ))
 
 
 class ConfigError(Exception):
